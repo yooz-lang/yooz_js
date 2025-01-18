@@ -8,63 +8,88 @@ export class YoozORM {
 
     if (!data || Object.keys(data).length === 0) return "Data cannot be empty.";
 
-    if (!where || !where.category) return "group cannot be empty.";
+    if (!where || !where.group) return "group cannot be empty.";
 
     function formatData(data) {
-      const entries = Object.entries(data).map(([key, value]) => {
-        if (typeof value === "object" && value !== null) {
-  
-          const nestedEntries = Object.entries(value).map(
-            ([nestedKey, nestedValue]) => {
-              return `-${nestedKey}, +${nestedValue}`;
-            }
-          );
-          return `${key}=[${nestedEntries.join(", ")}]`;
-        }
-        return `${key}=${value}`;
-      });
-      return entries.join(", ");
+      return Object.entries(data).map(([key, value]) => {
+        return `${key}: "${value}"`;
+      }).join(", ");
     }
-  
+
     function formatCondition(data) {
-      
       const entries = Object.entries(data).map(([key, value]) => {
-        if (typeof value === "object" && value !== null) {
-  
-          const nestedEntries = Object.entries(value).map(
-            ([nestedKey, nestedValue]) => {
-              return `-${nestedKey}, +${nestedValue}`;
-            }
-          );
-          return `${key}==[${nestedEntries.join(", ")}]`;
+        if (!where.layer || where.layer === 0) {
+          return `${key} == ${value}`;
         }
-        if(!where.layer || where.layer === 0){
-          return `${key}==${value}`;
-        }
-        return `${key}(${where.layer})==${value}`;
+        return `${key}(${where.layer}) == ${value}`;
       });
       return entries.join(", ");
     }
 
     switch (action.action) {
       case "delete":
-
-        const formattedString = formatData(data);
-
-        query = `REMOVE FROM ${where.category}("${formattedString}") IF ${formatCondition(where.condition)}`;
+        const formattedDeleteString = formatData(data);
+        query = `REMOVE FROM ${where.group}("${formattedDeleteString}") IF ${formatCondition(where.condition)}`;
         return query;
-        
 
       case "create":
-        break;
+        if (!where.field) {
+          return "Field cannot be empty";
+        }
+        const formattedCreateData = formatData(data);
+        if (!where.layer || where.layer === 0) {
+          query = `ADD FROM ${where.group}("${where.field}") [${formattedCreateData}]`;
+        } else {
+          query = `ADD FROM ${where.group}("${where.field}(${where.layer})") [${formattedCreateData}]`;
+        }
+        return query;
 
       case "update":
-        break;
+        return this.updateData(data, where);
 
       default:
         return "The action is invalid.";
     }
   }
 
-  
+  findData(data, where) {
+    if (!data || Object.keys(data).length === 0) return "Data cannot be empty.";
+    if (!where || !where.group) return "Group cannot be empty.";
+
+    const formattedFindString = Object.entries(data)
+      .map(([key, value]) => `${key}: "${value}"`)
+      .join(", ");
+
+    const formattedCondition = Object.entries(where.condition)
+      .map(([key, value]) => {
+        if (!where.layer || where.layer === 0) {
+          return `${key} == ${value}`;
+        }
+        return `${key}(${where.layer}) == ${value}`;
+      })
+      .join(", ");
+
+    return `FIND FROM ${where.group}("${formattedFindString}") IF ${formattedCondition}`;
+  }
+
+  updateData(data, where) {
+    if (!data || Object.keys(data).length === 0) return "Data cannot be empty.";
+    if (!where || !where.group) return "Group cannot be empty.";
+    if (!where.field) return "Field cannot be empty.";
+
+    const formattedUpdateData = Object.entries(data)
+      .map(([key, value]) => `${key}: "${value}"`)
+      .join(", ");
+
+    const formattedCondition = Object.entries(where.condition)
+      .map(([key, value]) => {
+        if (!where.layer || where.layer === 0) {
+          return `${key} == ${value}`;
+        }
+        return `${key}(${where.layer}) == ${value}`;
+      })
+      .join(", ");
+
+    return `CHANGE FROM ${where.group}("${where.field}") [${formattedUpdateData}] IF ${formattedCondition}`;
+  }
 }
